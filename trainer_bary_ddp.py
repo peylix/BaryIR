@@ -65,8 +65,8 @@ parser.add_argument('--patch_size', type=int, default=128, help='patchsize of in
 parser.add_argument('--data_file_dir', type=str, default='data_dir/', help='where clean images of denoising saves.')
 parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for DDP")
 parser.add_argument('--allweather', action='store_true', help='use AllWeather dataset instead of default multi-task datasets.')
-parser.add_argument('--allweather_dir', type=str, default='data/allweather/', help='root directory of the AllWeather dataset (contains input/ and gt/).')
-parser.add_argument('--allweather_index', type=str, default='dataset-index.txt', help='path to AllWeather index file mapping filenames to categories.')
+parser.add_argument('--allweather_dir', type=str, default=None, help='absolute path to the AllWeather dataset root (contains input/ and gt/).')
+parser.add_argument('--allweather_index', type=str, default=None, help='absolute path to AllWeather index file mapping filenames to categories.')
 
 
 def get_parameter_number(net):
@@ -81,6 +81,11 @@ def main():
     global opt, BaryIR, Lambda, K
 
     opt = parser.parse_args()
+    if opt.allweather:
+        if not os.path.isabs(opt.allweather_dir):
+            parser.error("--allweather_dir must be an absolute path")
+        if not os.path.isabs(opt.allweather_index):
+            parser.error("--allweather_index must be an absolute path")
 
     if 'LOCAL_RANK' in os.environ:
         local_rank = int(os.environ['LOCAL_RANK'])
