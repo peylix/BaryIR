@@ -400,6 +400,7 @@ def train(training_data_loader, BaryIR_optimizer, Pots_optimizer, BaryIR, Pots, 
                                                                                                  BaryIR_train_loss.data,
                                                                                                  mse_loss,
                                                                                                  ))
+            os.makedirs('./checksample/' + opt.type, exist_ok=True)
             save_image(out_restored.data, './checksample/' + opt.type + '/output.png')
             # bary_vis = torch.mean(bary_latent, dim=1).view(3,1,16,-1)
             # res_vis = torch.mean(res_bary, dim=1).view(3,1,16,-1)
