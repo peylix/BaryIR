@@ -10,7 +10,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from model_bary import *
-from util.universal_dataset import TrainDataset
+from util.universal_dataset import TrainDataset, AllWeatherTrainDataset
 from torchvision.utils import save_image
 from utils import unfreeze, freeze
 from scipy import io as scio
@@ -62,6 +62,9 @@ parser.add_argument("--type", default="Deraining", type=str, help="to distinguis
 parser.add_argument('--patch_size', type=int, default=128, help='patchsize of input.')
 # path
 parser.add_argument('--data_file_dir', type=str, default='data_dir/', help='where clean images of denoising saves.')
+parser.add_argument('--allweather', action='store_true', help='use AllWeather dataset instead of default multi-task datasets.')
+parser.add_argument('--allweather_dir', type=str, default='data/allweather/', help='root directory of the AllWeather dataset (contains input/ and gt/).')
+parser.add_argument('--allweather_index', type=str, default='dataset-index.txt', help='path to AllWeather index file mapping filenames to categories.')
 
 
 def get_parameter_number(net):
@@ -144,7 +147,10 @@ def main():
     MSE = []
     BaryLOSS = []
     PotLOSS = []
-    train_set = TrainDataset(opt)
+    if opt.allweather:
+        train_set = AllWeatherTrainDataset(opt)
+    else:
+        train_set = TrainDataset(opt)
     domain_sample_counts = train_set.get_num_samples()
     print(domain_sample_counts)
     inverse_counts = [1 / count for count in domain_sample_counts]

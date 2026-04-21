@@ -562,7 +562,158 @@ class LowLightTestDataset(Dataset):
         return noisy_patch, clean_patch
 
 
-# ---- other dataset ----
+# ---- AllWeather dataset ----
+
+
+class AllWeatherTrainDataset(Dataset):
+    """
+    Training dataset for the AllWeather benchmark (raindrop/rain/snow).
+    Reads an index file with format: ./input/filename.ext:category
+    and loads paired images from allweather_dir/input/ and allweather_dir/gt/.
+
+    Category-to-de_id mapping (compatible with BaryIR training loop):
+      1 (raindrop) -> de_id = 0  -> Lambda[0], Pots index 0
+      2 (rain)     -> de_id = 3  -> Lambda[1], Pots index 1
+      3 (snow)     -> de_id = 4  -> Lambda[2], Pots index 2
+    Use with num_sources=3.
+    """
+
+    CATEGORY_TO_DEID = {1: 0, 2: 3, 3: 4}
+
+    def __init__(self, args):
+        super(AllWeatherTrainDataset, self).__init__()
+        self.args = args
+
+        self.raindrop_ids = []  # category 1
+        self.rain_ids = []      # category 2
+        self.snow_ids = []      # category 3
+
+        self._init_ids()
+        self._merge_ids()
+
+        self.crop_transform = Compose([
+            ToPILImage(),
+            RandomCrop(args.patch_size),
+        ])
+        self.toTensor = ToTensor()
+
+    def _init_ids(self):
+        index_path = self.args.allweather_index
+        allweather_dir = self.args.allweather_dir
+
+        with open(index_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                path_part, cat_str = line.rsplit(':', 1)
+                category = int(cat_str)
+                filename = os.path.basename(path_part)
+                de_id = self.CATEGORY_TO_DEID[category]
+
+                entry = {
+                    "input_path": os.path.join(allweather_dir, 'input', filename),
+                    "gt_path": os.path.join(allweather_dir, 'gt', filename),
+                    "de_type": de_id,
+                    "filename": filename
+                }
+
+                if category == 1:
+                    self.raindrop_ids.append(entry)
+                elif category == 2:
+                    self.rain_ids.append(entry)
+                elif category == 3:
+                    self.snow_ids.append(entry)
+
+        # Oversample rain (818) to roughly match raindrop (9001) and snow (8250)
+        if len(self.rain_ids) > 0:
+            rain_mult = max(1, len(self.raindrop_ids) // len(self.rain_ids))
+            self.rain_ids = self.rain_ids * rain_mult
+
+        self.num_raindrop = len(self.raindrop_ids)
+        self.num_rain = len(self.rain_ids)
+        self.num_snow = len(self.snow_ids)
+
+        myprint(f"AllWeather - Raindrop: {self.num_raindrop}, Rain: {self.num_rain}, Snow: {self.num_snow}")
+
+    def _merge_ids(self):
+        self.sample_ids = self.raindrop_ids + self.rain_ids + self.snow_ids
+        random.shuffle(self.sample_ids)
+        myprint(f"AllWeather total samples: {len(self.sample_ids)}")
+
+    def _crop_patch(self, img_1, img_2):
+        H = img_1.shape[0]
+        W = img_1.shape[1]
+        ind_H = random.randint(0, H - self.args.patch_size)
+        ind_W = random.randint(0, W - self.args.patch_size)
+        patch_1 = img_1[ind_H:ind_H + self.args.patch_size, ind_W:ind_W + self.args.patch_size]
+        patch_2 = img_2[ind_H:ind_H + self.args.patch_size, ind_W:ind_W + self.args.patch_size]
+        return patch_1, patch_2
+
+    def __getitem__(self, idx):
+        sample = self.sample_ids[idx]
+        de_id = sample["de_type"]
+
+        degrad_img = crop_img(np.array(Image.open(sample["input_path"]).convert('RGB')), base=16)
+        clean_img = crop_img(np.array(Image.open(sample["gt_path"]).convert('RGB')), base=16)
+
+        degrad_patch, clean_patch = random_augmentation(*self._crop_patch(degrad_img, clean_img))
+
+        clean_name = sample["filename"].split('.')[0]
+
+        clean_patch = self.toTensor(clean_patch)
+        degrad_patch = self.toTensor(degrad_patch)
+
+        return [clean_name, de_id], degrad_patch, clean_patch
+
+    def __len__(self):
+        return len(self.sample_ids)
+
+    def get_num_samples(self):
+        # Order matches Lambda indexing in training loop:
+        # [0] -> de_id < 3 group (raindrop)
+        # [1] -> de_id = 3 (rain)
+        # [2] -> de_id = 4 (snow)
+        return [self.num_raindrop, self.num_rain, self.num_snow]
+
+
+class AllWeatherTestDataset(Dataset):
+    """
+    Test dataset for AllWeather. Loads all paired images from input/ and gt/
+    under the given directory.
+    """
+
+    def __init__(self, args):
+        super(AllWeatherTestDataset, self).__init__()
+        self.args = args
+        self.toTensor = ToTensor()
+        self.ids = []
+
+        input_dir = os.path.join(args.allweather_dir, 'input')
+        gt_dir = os.path.join(args.allweather_dir, 'gt')
+        for fname in sorted(os.listdir(input_dir)):
+            self.ids.append({
+                "input_path": os.path.join(input_dir, fname),
+                "gt_path": os.path.join(gt_dir, fname),
+                "filename": fname
+            })
+
+        myprint(f"AllWeather test set: {len(self.ids)} images")
+
+    def __getitem__(self, idx):
+        sample = self.ids[idx]
+
+        degrad_img = crop_img(np.array(Image.open(sample["input_path"]).convert('RGB')), base=16)
+        clean_img = crop_img(np.array(Image.open(sample["gt_path"]).convert('RGB')), base=16)
+
+        clean_img = self.toTensor(clean_img)
+        degrad_img = self.toTensor(degrad_img)
+        name = sample["filename"].split('.')[0]
+
+        return [name], degrad_img, clean_img
+
+    def __len__(self):
+        return len(self.ids)
 
 
 if __name__ == '__main__':
