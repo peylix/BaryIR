@@ -57,25 +57,34 @@ if not os.path.exists(opt.save):
     os.mkdir(opt.save)
 
 BaryIR = torch.load(opt.model)["BaryIR"]
+if cuda:
+    BaryIR = BaryIR.cuda()
+BaryIR.eval()
+
+# ---- Parameter Count ----
+total_params = sum(p.numel() for p in BaryIR.parameters())
+trainable_params = sum(p.numel() for p in BaryIR.parameters() if p.requires_grad)
+print("="*60)
+print(f"Total parameters:     {total_params:,} ({total_params/1e6:.2f}M)")
+print(f"Trainable parameters: {trainable_params:,} ({trainable_params/1e6:.2f}M)")
+print("="*60)
+
 deg_list = glob.glob(opt.degset+"*")
 deg_list = sorted(deg_list)
-
 
 tar_list = sorted(glob.glob(opt.tarset+"*"))
 num = len(deg_list)
 data_list = []
-# transform = torchvision.transforms.Compose([torchvision.transforms.CenterCrop([256, 256]),torchvision.transforms.ToTensor()])
+inference_times = []
+
 with torch.no_grad():
-    for deg_name, tar_name in zip(deg_list, tar_list):
+    for img_idx, (deg_name, tar_name) in enumerate(zip(deg_list, tar_list)):
         name = tar_name.split('/')
-        print(name)
         print("Processing ", deg_name)
         deg_img = Image.open(deg_name).convert('RGB')
         tar_img = Image.open(tar_name).convert('RGB')
         deg_img = np.array(deg_img)
         tar_img = np.array(tar_img)
-        # deg_img = transform(deg_img).float()
-        # tar_img = transform(tar_img).float()
 
         h,w = deg_img.shape[0],deg_img.shape[1]
         shape1 = deg_img.shape
@@ -100,24 +109,46 @@ with torch.no_grad():
 
         data_degraded = deg_img
         if cuda:
-            BaryIR = BaryIR.cuda()
             gt=gt.cuda()
             data_degraded = data_degraded.cuda()
-        else:
-            BaryIR = BaryIR.cpu()
 
+        # Timing: use cuda events for accurate GPU timing
+        if cuda:
+            torch.cuda.synchronize()
         start_time = time.time()
 
-
-        im_output = torch.zeros(size=data_degraded.shape)
         im_output, _ ,_,_ = BaryIR(data_degraded)
+
+        if cuda:
+            torch.cuda.synchronize()
+        elapsed = time.time() - start_time
+
+        # Skip first image (CUDA warmup)
+        if img_idx > 0:
+            inference_times.append(elapsed)
+
         res = data_degraded - im_output
 
-        # save_image(res.data * 2, opt.saveres + '/' + name[-1])
         save_image(im_output.data,opt.save+'/'+name[-1])
         save_image(tar_img.data, opt.savetar+'/'+name[-1])
 
-# inception_model = torchvision.models.inception_v3(pretrained=True)
+# ---- Inference Time Stats ----
+print("="*60)
+if len(inference_times) > 0:
+    avg_time = sum(inference_times) / len(inference_times)
+    min_time = min(inference_times)
+    max_time = max(inference_times)
+    total_time = sum(inference_times)
+    print(f"Inference time (excluding 1st image warmup):")
+    print(f"  Images timed: {len(inference_times)}")
+    print(f"  Average:      {avg_time:.4f}s ({1/avg_time:.2f} FPS)")
+    print(f"  Min:          {min_time:.4f}s")
+    print(f"  Max:          {max_time:.4f}s")
+    print(f"  Total:        {total_time:.4f}s")
+else:
+    print("Not enough images to compute inference time (need at least 2).")
+print("="*60)
+
 fid_value = fid_score.calculate_fid_given_paths([opt.savetar, opt.save], batch_size=50,
                                                 device='cuda', dims=2048, num_workers=8)
 print('FID value:', fid_value)
