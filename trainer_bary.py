@@ -65,8 +65,12 @@ parser.add_argument('--data_file_dir', type=str, default='data_dir/', help='wher
 parser.add_argument('--allweather', action='store_true', help='use AllWeather dataset instead of default multi-task datasets.')
 parser.add_argument('--allweather_dir', type=str, default=None, help='absolute path to the AllWeather dataset root (contains input/ and gt/).')
 parser.add_argument('--allweather_index', type=str, default=None, help='absolute path to AllWeather index file mapping filenames to categories.')
-parser.add_argument('--allweather_test', nargs='+', default=None,
-                    help='allweather test sets, format: name:input_dir:gt_dir (e.g., raindrop:/path/data/:/path/gt/)')
+parser.add_argument('--test_raindrop', nargs=2, default=None, metavar=('INPUT', 'GT'),
+                    help='raindrop test set: input_dir gt_dir')
+parser.add_argument('--test_rain', nargs=2, default=None, metavar=('INPUT', 'GT'),
+                    help='rain test set: input_dir gt_dir')
+parser.add_argument('--test_snow', nargs=2, default=None, metavar=('INPUT', 'GT'),
+                    help='snow test set: input_dir gt_dir')
 
 
 def get_parameter_number(net):
@@ -172,16 +176,13 @@ def main():
 
     # Build test set list
     allweather_test_sets = []
-    if opt.allweather and opt.allweather_test:
-        for entry in opt.allweather_test:
-            parts = entry.split(':')
-            if len(parts) != 3:
-                raise ValueError(f"--allweather_test format error: '{entry}', expected name:input_dir:gt_dir")
-            name, input_dir, gt_dir = parts
-            deg = sorted(glob.glob(input_dir + "*"))
-            tar = sorted(glob.glob(gt_dir + "*"))
-            allweather_test_sets.append((name, deg, tar))
-            print(f"Test set '{name}': {len(deg)} images")
+    if opt.allweather:
+        for name, dirs in [('raindrop', opt.test_raindrop), ('rain', opt.test_rain), ('snow', opt.test_snow)]:
+            if dirs is not None:
+                deg = sorted(glob.glob(dirs[0] + "*"))
+                tar = sorted(glob.glob(dirs[1] + "*"))
+                allweather_test_sets.append((name, deg, tar))
+                print(f"Test set '{name}': {len(deg)} images")
 
     deg_list = glob.glob(opt.degset + "*")
     deg_list = sorted(deg_list)
