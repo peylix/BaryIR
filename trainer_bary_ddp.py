@@ -67,6 +67,8 @@ parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for D
 parser.add_argument('--allweather', action='store_true', help='use AllWeather dataset instead of default multi-task datasets.')
 parser.add_argument('--allweather_dir', type=str, default=None, help='absolute path to the AllWeather dataset root (contains input/ and gt/).')
 parser.add_argument('--allweather_index', type=str, default=None, help='absolute path to AllWeather index file mapping filenames to categories.')
+parser.add_argument('--allweather_test', nargs='+', default=None,
+                    help='allweather test sets, format: name:input_dir:gt_dir (e.g., raindrop:/path/data/:/path/gt/)')
 
 
 def get_parameter_number(net):
@@ -217,26 +219,46 @@ def main():
                                       pin_memory=True)
 
     num = 0
+
+    # Build test set list
+    allweather_test_sets = []
+    if opt.allweather and opt.allweather_test:
+        for entry in opt.allweather_test:
+            parts = entry.split(':')
+            if len(parts) != 3:
+                raise ValueError(f"--allweather_test format error: '{entry}', expected name:input_dir:gt_dir")
+            name, input_dir, gt_dir = parts
+            deg = sorted(glob.glob(input_dir + "*"))
+            tar = sorted(glob.glob(gt_dir + "*"))
+            allweather_test_sets.append((name, deg, tar))
+            if is_main_process():
+                print(f"Test set '{name}': {len(deg)} images")
+
     deg_list = glob.glob(opt.degset + "*")
     deg_list = sorted(deg_list)
     tar_list = sorted(glob.glob(opt.tarset + "*"))
 
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
         train_sampler.set_epoch(epoch)
-        
+
         BaryIRloss = 0
         Ploss = 0
         a, b = train(training_data_loader, BaryIR_optimizer, Pots_optimizer, BaryIR, Pots, epoch, local_rank)
 
         if is_main_process():
-            p = evaluate(BaryIR, deg_list, tar_list, device)
-            
-            if not os.path.exists("./checksample/all/"):
-                os.makedirs("./checksample/all/")
-                
-            with open("./checksample/all/validation_results.txt", "a") as f:
-                f.write(
-                    f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, psnr {p:.4f}, Batchsize {opt.batchSize}\n")
+            os.makedirs("./checksample/all/", exist_ok=True)
+            if allweather_test_sets:
+                for name, deg, tar in allweather_test_sets:
+                    p = evaluate(BaryIR, deg, tar, device)
+                    print(f"[{name}] Epoch {epoch}, PSNR: {p:.4f}")
+                    with open("./checksample/all/validation_results.txt", "a") as f:
+                        f.write(
+                            f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, [{name}] psnr {p:.4f}, Batchsize {opt.batchSize}\n")
+            else:
+                p = evaluate(BaryIR, deg_list, tar_list, device)
+                with open("./checksample/all/validation_results.txt", "a") as f:
+                    f.write(
+                        f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, psnr {p:.4f}, Batchsize {opt.batchSize}\n")
 
             BaryIRloss += a
             Ploss += b
@@ -256,8 +278,11 @@ def main():
 def evaluate(BaryIR, deg_list, tar_list, device):
     pp = 0
     print('----------validating-----------')
+    if len(deg_list) == 0:
+        print('No validation images found, skipping.')
+        return 0
     BaryIR.eval()
-    
+
     with torch.no_grad():
         for deg_name, tar_name in zip(deg_list, tar_list):
             deg_img = Image.open(deg_name).convert('RGB')

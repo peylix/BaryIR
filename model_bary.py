@@ -3,6 +3,7 @@
 ## https://arxiv.org/abs/2306.13090
 
 
+import os
 import torch
 # print(torch.__version__)
 import torch.nn as nn
@@ -13,6 +14,8 @@ from torchvision.utils import save_image
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import time
+
+os.makedirs('./checksample', exist_ok=True)
 
 
 ##########################################################################
