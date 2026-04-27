@@ -293,10 +293,16 @@ def evaluate(BaryIR, deg_list, tar_list, device):
             h, w = deg_img.shape[0], deg_img.shape[1]
             shape1 = deg_img.shape
             shape2 = tar_img.shape
-            if (h % 4) or (w % 4) != 0:
-                continue
             if shape1 != shape2:
                 continue
+            while (h % 8) != 0:
+                h -= 1
+                deg_img = deg_img[0:h, :]
+                tar_img = tar_img[0:h, :]
+            while (w % 8) != 0:
+                w -= 1
+                deg_img = deg_img[:, 0:w]
+                tar_img = tar_img[:, 0:w]
             deg_img = np.transpose(deg_img, (2, 0, 1))
             deg_img = torch.from_numpy(deg_img).float() / 255
             deg_img = deg_img.unsqueeze(0)
