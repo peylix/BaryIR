@@ -186,18 +186,6 @@ Performance results of the BaryIR framework trained under the all-in-one setting
 ## Run the project on `allweather`
 
 ```bash
-python trainer_bary.py \
-      --allweather \
-      --allweather_dir=/root/autodl-tmp/allweather \
-      --allweather_index=/root/BaryIR/dataset-index.txt \
-      --test_raindrop /root/autodl-tmp/raindrop_data/test_a/data/
-  /root/autodl-tmp/raindrop_data/test_a/gt/ \
-      --test_rain /root/autodl-tmp/CVPR19RainTrain/test/data/
-  /root/autodl-tmp/CVPR19RainTrain/test/gt/ \
-      --test_snow
-  /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/synthetic/
-  /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/gt/ \
-      --batchSize=4 --nEpochs=200 --patch_size=128 \
-      --backbone=BaryNet --num_sources=3 --type allweather
+python trainer_bary.py --allweather --allweather_dir=/root/autodl-tmp/allweather --allweather_index=/root/BaryIR/dataset-index.txt --test_raindrop /root/autodl-tmp/raindrop_data/test_a/data/ /root/autodl-tmp/raindrop_data/test_a/gt/ --test_rain /root/autodl-tmp/CVPR19RainTrain/test/data/ /root/autodl-tmp/CVPR19RainTrain/test/gt/ --test_snow /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/synthetic/ /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/gt/ --batchSize=4 --nEpochs=65 --step=35 --patch_size=128 --backbone=BaryNet --num_sources=3 --type allweather
 ```
 
