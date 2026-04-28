@@ -71,6 +71,10 @@ parser.add_argument('--test_rain', nargs=2, default=None, metavar=('INPUT', 'GT'
                     help='rain test set: input_dir gt_dir')
 parser.add_argument('--test_snow', nargs=2, default=None, metavar=('INPUT', 'GT'),
                     help='snow test set: input_dir gt_dir')
+parser.add_argument('--val_interval', type=int, default=5,
+                    help='run validation every N epochs (last epoch is always validated).')
+parser.add_argument('--val_snow_max', type=int, default=200,
+                    help='max number of snow images used for in-training validation (0 = all).')
 
 
 def get_parameter_number(net):
@@ -181,8 +185,13 @@ def main():
             if dirs is not None:
                 deg = sorted(glob.glob(dirs[0] + "*"))
                 tar = sorted(glob.glob(dirs[1] + "*"))
+                if name == 'snow' and opt.val_snow_max > 0 and len(deg) > opt.val_snow_max:
+                    deg = deg[:opt.val_snow_max]
+                    tar = tar[:opt.val_snow_max]
+                    print(f"Test set 'snow': using {len(deg)} subset for in-training validation (final eval should use full set via tester_bary.py)")
+                else:
+                    print(f"Test set '{name}': {len(deg)} images")
                 allweather_test_sets.append((name, deg, tar))
-                print(f"Test set '{name}': {len(deg)} images")
 
     deg_list = glob.glob(opt.degset + "*")
     deg_list = sorted(deg_list)
@@ -194,18 +203,20 @@ def main():
         a, b = train(training_data_loader, BaryIR_optimizer, Pots_optimizer, BaryIR, Pots, epoch)
 
         os.makedirs("./checksample/all/", exist_ok=True)
-        if allweather_test_sets:
-            for name, deg, tar in allweather_test_sets:
-                p = evaluate(BaryIR, deg, tar)
-                print(f"[{name}] Epoch {epoch}, PSNR: {p:.4f}")
+        do_validate = (epoch % opt.val_interval == 0) or (epoch == opt.nEpochs)
+        if do_validate:
+            if allweather_test_sets:
+                for name, deg, tar in allweather_test_sets:
+                    p = evaluate(BaryIR, deg, tar)
+                    print(f"[{name}] Epoch {epoch}, PSNR: {p:.4f}")
+                    with open("./checksample/all/validation_results.txt", "a") as f:
+                        f.write(
+                            f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, [{name}] psnr {p:.4f}, Batchsize {opt.batchSize}\n")
+            else:
+                p = evaluate(BaryIR, deg_list, tar_list)
                 with open("./checksample/all/validation_results.txt", "a") as f:
                     f.write(
-                        f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, [{name}] psnr {p:.4f}, Batchsize {opt.batchSize}\n")
-        else:
-            p = evaluate(BaryIR, deg_list, tar_list)
-            with open("./checksample/all/validation_results.txt", "a") as f:
-                f.write(
-                    f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, psnr {p:.4f}, Batchsize {opt.batchSize}\n")
+                        f"Net {opt.backbone}  Patchsize {opt.patch_size} Epoch {epoch}, psnr {p:.4f}, Batchsize {opt.batchSize}\n")
 
         BaryIRloss += a
         Ploss += b
@@ -228,8 +239,6 @@ def evaluate(BaryIR, deg_list, tar_list):
     with torch.no_grad():
         for deg_name, tar_name in zip(deg_list, tar_list):
             name = tar_name.split('/')
-            print(name)
-            print("Processing ", deg_name)
             deg_img = Image.open(deg_name).convert('RGB')
             tar_img = Image.open(tar_name).convert('RGB')
             deg_img = np.array(deg_img)
