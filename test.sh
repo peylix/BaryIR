@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 MODEL=/root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth
 GPU=0
