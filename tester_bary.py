@@ -150,9 +150,13 @@ else:
     print("Not enough images to compute inference time (need at least 2).")
 print("="*60)
 
-fid_value = fid_score.calculate_fid_given_paths([opt.savetar, opt.save], batch_size=50,
-                                                device='cuda', dims=2048, num_workers=8)
-print('FID value:', fid_value)
+try:
+    fid_value = fid_score.calculate_fid_given_paths([opt.savetar, opt.save], batch_size=1,
+                                                    device='cuda', dims=2048, num_workers=4)
+    print('FID value:', fid_value)
+except Exception as e:
+    print('FID computation failed:', e)
+    print('FID value: N/A')
 
 
 tar_files = sorted(os.listdir(opt.savetar))
