@@ -8,7 +8,7 @@ import cv2
 from util.metrics import calculate_psnr, calculate_ssim
 import torchvision
 from torchvision.utils import save_image
-import fid_score
+from pytorch_fid import fid_score
 from thop import profile
 
 parser = argparse.ArgumentParser(description="PyTorch SRResNet Eval")

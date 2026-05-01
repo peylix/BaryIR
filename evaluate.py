@@ -10,7 +10,7 @@ import os
 import lpips
 import torchvision.transforms as transforms
 from PIL import Image
-import fid_score
+from pytorch_fid import fid_score
 
 
 
