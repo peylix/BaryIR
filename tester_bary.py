@@ -4,7 +4,8 @@ import torch
 import numpy as np
 import time, math, glob
 from PIL import Image
-from evaluate import calculate_evaluation_floder
+import cv2
+from util.metrics import calculate_psnr, calculate_ssim
 import torchvision
 from torchvision.utils import save_image
 import fid_score
@@ -53,8 +54,8 @@ cuda = True#opt.cuda
 if cuda and not torch.cuda.is_available():
     raise Exception("No GPU found, please run without --cuda")
 
-if not os.path.exists(opt.save):
-    os.mkdir(opt.save)
+os.makedirs(opt.save, exist_ok=True)
+os.makedirs(opt.savetar, exist_ok=True)
 
 BaryIR = torch.load(opt.model)["BaryIR"]
 if cuda:
@@ -154,6 +155,25 @@ fid_value = fid_score.calculate_fid_given_paths([opt.savetar, opt.save], batch_s
 print('FID value:', fid_value)
 
 
-psnr, ssim, pmax, smax, pmin, smin=calculate_evaluation_floder(opt.savetar,opt.save)
-print("PSNR: Averyge {:.5f},   best {:.5f},   worst {:.5f}".format(psnr, pmax, pmin))
-print("SSIM: Averyge {:.5f},   best {:.5f},   worst {:.5f}".format(ssim, smax, smin))
+tar_files = sorted(os.listdir(opt.savetar))
+out_files = sorted(os.listdir(opt.save))
+psnr_sum, ssim_sum, n = 0.0, 0.0, 0
+pmax, smax, pmin, smin = 0.0, 0.0, 100.0, 1.0
+best_pname = best_sname = worst_pname = worst_sname = ''
+for nt, no in zip(tar_files, out_files):
+    im_t = cv2.imread(os.path.join(opt.savetar, nt))
+    im_o = cv2.imread(os.path.join(opt.save, no))
+    if im_t is None or im_o is None or im_t.shape != im_o.shape:
+        continue
+    p = calculate_psnr(im_o, im_t, test_y_channel=True)
+    s = calculate_ssim(im_o, im_t, test_y_channel=True)
+    psnr_sum += p; ssim_sum += s; n += 1
+    if p > pmax: pmax, best_pname = p, nt
+    if p < pmin: pmin, worst_pname = p, nt
+    if s > smax: smax, best_sname = s, nt
+    if s < smin: smin, worst_sname = s, nt
+
+psnr_avg = psnr_sum / n
+ssim_avg = ssim_sum / n
+print("PSNR (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(psnr_avg, pmax, best_pname, pmin, worst_pname))
+print("SSIM (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(ssim_avg, smax, best_sname, smin, worst_sname))

@@ -185,10 +185,20 @@ Performance results of the BaryIR framework trained under the all-in-one setting
 
 ## Run the project on `allweather`
 
-```bash
-python trainer_bary.py --allweather --allweather_dir=/root/autodl-tmp/allweather --allweather_index=/root/BaryIR/dataset-index.txt --test_raindrop /root/autodl-tmp/raindrop_data/test_a/data/ /root/autodl-tmp/raindrop_data/test_a/gt/ --test_rain /root/autodl-tmp/CVPR19RainTrain/test/data/ /root/autodl-tmp/CVPR19RainTrain/test/gt/ --test_snow /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/synthetic/ /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/gt/ --batchSize=4 --nEpochs=65 --step=35 --patch_size=128 --backbone=BaryNet --num_sources=3 --type allweather
-```
+1. Training
+    ```bash
+    python trainer_bary.py --allweather --allweather_dir=/root/autodl-tmp/allweather --allweather_index=/root/BaryIR/dataset-index.txt --test_raindrop /root/autodl-tmp/raindrop_data/test_a/data/ /root/autodl-tmp/raindrop_data/test_a/gt/ --test_rain /root/autodl-tmp/CVPR19RainTrain/test/data/ /root/autodl-tmp/CVPR19RainTrain/test/gt/ --test_snow /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/synthetic/ /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/gt/ --batchSize=4 --nEpochs=65 --step=35 --patch_size=128 --backbone=BaryNet --num_sources=3 --type allweather
+    ```
 
-```bash
- python tester_bary.py --model /root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth --degset /root/autodl-tmp/Snow100K-testset/.../synthetic/ --tarset /root/autodl-tmp/Snow100K-testset/.../gt/ --save ./results/snow/OUT/ --savetar ./results/snow/TAR/
-```
+2. Testing
+    ```bash
+    python tester_bary.py --model /root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth --degset /root/autodl-tmp/raindrop_data/test_a/data/ --tarset /root/autodl-tmp/raindrop_data/test_a/gt/ --save /root/BaryIR/results/raindrop/OUT/ --savetar /root/BaryIR/results/raindrop/TAR/ --gpus 0 2>&1 | tee /root/BaryIR/results/raindrop/log.txt
+    ```
+
+    ```bash
+    python tester_bary.py --model /root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth --degset /root/autodl-tmp/CVPR19RainTrain/test/data/ --tarset /root/autodl-tmp/CVPR19RainTrain/test/gt/ --save /root/BaryIR/results/rain/OUT/ --savetar /root/BaryIR/results/rain/TAR/ --gpus 0 2>&1 | tee /root/BaryIR/results/rain/log.txt
+    ```
+
+    ```bash
+    python tester_bary.py --model /root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth --degset /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/synthetic/ --tarset /root/autodl-tmp/Snow100K-testset/jdway/GameSSD/overlapping/test/Snow100K-L/gt/ --save /root/BaryIR/results/snow/OUT/ --savetar /root/BaryIR/results/snow/TAR/ --gpus 0 2>&1 | tee /root/BaryIR/results/snow/log.txt
+    ```
