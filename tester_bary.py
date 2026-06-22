@@ -5,7 +5,14 @@ import numpy as np
 import time, math, glob
 from PIL import Image
 import cv2
-from util.metrics import calculate_psnr, calculate_ssim
+from util.metrics import (
+    calculate_psnr,
+    calculate_ssim,
+    calculate_mae,
+    PerceptualMetricComputer,
+    summarize_metric,
+    format_mean_std,
+)
 import torchvision
 from torchvision.utils import save_image
 from pytorch_fid import fid_score
@@ -161,7 +168,8 @@ except Exception as e:
 
 tar_files = sorted(os.listdir(opt.savetar))
 out_files = sorted(os.listdir(opt.save))
-psnr_sum, ssim_sum, n = 0.0, 0.0, 0
+metric_computer = PerceptualMetricComputer(device='cuda' if cuda else 'cpu')
+psnr_list, ssim_list, mae_list, lpips_list, dists_list = [], [], [], [], []
 pmax, smax, pmin, smin = 0.0, 0.0, 100.0, 1.0
 best_pname = best_sname = worst_pname = worst_sname = ''
 for nt, no in zip(tar_files, out_files):
@@ -171,13 +179,26 @@ for nt, no in zip(tar_files, out_files):
         continue
     p = calculate_psnr(im_o, im_t, test_y_channel=True)
     s = calculate_ssim(im_o, im_t, test_y_channel=True)
-    psnr_sum += p; ssim_sum += s; n += 1
+    m = calculate_mae(im_o, im_t, test_y_channel=True)
+    lp = metric_computer.calculate_lpips(im_o, im_t)
+    di = metric_computer.calculate_dists(im_o, im_t)
+    psnr_list.append(p); ssim_list.append(s); mae_list.append(m)
+    lpips_list.append(lp); dists_list.append(di)
     if p > pmax: pmax, best_pname = p, nt
     if p < pmin: pmin, worst_pname = p, nt
     if s > smax: smax, best_sname = s, nt
     if s < smin: smin, worst_sname = s, nt
 
-psnr_avg = psnr_sum / n
-ssim_avg = ssim_sum / n
-print("PSNR (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(psnr_avg, pmax, best_pname, pmin, worst_pname))
-print("SSIM (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(ssim_avg, smax, best_sname, smin, worst_sname))
+psnr_mean, psnr_std = summarize_metric(psnr_list)
+ssim_mean, ssim_std = summarize_metric(ssim_list)
+mae_mean, mae_std = summarize_metric(mae_list)
+lpips_mean, lpips_std = summarize_metric(lpips_list)
+dists_mean, dists_std = summarize_metric(dists_list)
+print("PSNR (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(psnr_mean, pmax, best_pname, pmin, worst_pname))
+print("SSIM (Y-channel): Average {:.5f},   best {:.5f} ({}),   worst {:.5f} ({})".format(ssim_mean, smax, best_sname, smin, worst_sname))
+print("Testing set metrics (mean +/- std):")
+print("PSNR:  {}".format(format_mean_std(psnr_mean, psnr_std)))
+print("SSIM:  {}".format(format_mean_std(ssim_mean, ssim_std)))
+print("MAE:   {}".format(format_mean_std(mae_mean, mae_std)))
+print("LPIPS: {}".format(format_mean_std(lpips_mean, lpips_std)))
+print("DISTS: {}".format(format_mean_std(dists_mean, dists_std)))

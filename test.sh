@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL=/root/BaryIR/checkpoint/model_allweatherBaryNet128__65_1.pth
+MODEL=/root/BaryIR/checkpoint/model_allweatherBaryNet128__100_1.pth
 GPU=0
 RESULTS_ROOT=/root/BaryIR/results
 
@@ -51,7 +51,7 @@ SUMMARY="${RESULTS_ROOT}/summary.txt"
   echo ""
   for name in raindrop rain snow; do
     echo "=== ${name} ==="
-    grep -E "PSNR|SSIM|FID|Total parameters|Average:" "${RESULTS_ROOT}/${name}/log.txt" || true
+    grep -E "PSNR|SSIM|MAE|LPIPS|DISTS|FID|Total parameters|Average:" "${RESULTS_ROOT}/${name}/log.txt" || true
     echo ""
   done
 } > "${SUMMARY}"

@@ -187,6 +187,113 @@ def _convert_output_type_range(img, dst_type):
     return img.astype(dst_type)
 
 
+def calculate_mae(img1, img2, test_y_channel=True):
+    """Calculate MAE (Mean Absolute Error) on the [0, 1] scale.
+
+    Args:
+        img1 (ndarray): Images with range [0, 255].
+        img2 (ndarray): Images with range [0, 255].
+        test_y_channel (bool): Test on Y channel of YCbCr. Default: True.
+
+    Returns:
+        float: mae result on the [0, 1] scale.
+    """
+
+    assert img1.shape == img2.shape, (
+        f"Image shapes are differnet: {img1.shape}, {img2.shape}."
+    )
+    img1 = img1.astype(np.float64)
+    img2 = img2.astype(np.float64)
+
+    if test_y_channel:
+        img1 = to_y_channel(img1)
+        img2 = to_y_channel(img2)
+
+    return float(np.mean(np.abs(img1 - img2)) / 255.0)
+
+
+def _bgr_to_rgb_tensor(img_bgr, device):
+    """Convert a BGR uint8 image (HWC) to an RGB float tensor in [0, 1] (1CHW)."""
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    tensor = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
+    return tensor
+
+
+class PerceptualMetricComputer:
+    """Lazily-loaded LPIPS / DISTS computer that reuses the loaded networks.
+
+    The models are heavy to construct, so they are instantiated on first use and
+    cached for subsequent calls. Inputs are BGR uint8 images (as returned by
+    ``cv2.imread``).
+    """
+
+    def __init__(self, device=None):
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self._lpips_model = None
+        self._dists_model = None
+
+    def _get_lpips_model(self):
+        if self._lpips_model is None:
+            try:
+                import lpips
+            except ImportError as exc:
+                raise ImportError("LPIPS requires `pip install lpips`.") from exc
+            self._lpips_model = lpips.LPIPS(net="alex").to(self.device).eval()
+        return self._lpips_model
+
+    def _get_dists_model(self):
+        if self._dists_model is None:
+            try:
+                from piq import DISTS
+            except ImportError as exc:
+                raise ImportError("DISTS requires `pip install piq`.") from exc
+            self._dists_model = DISTS().to(self.device).eval()
+        return self._dists_model
+
+    @torch.no_grad()
+    def calculate_lpips(self, img1, img2):
+        """LPIPS distance between two BGR uint8 images (lower is better)."""
+        model = self._get_lpips_model()
+        pred = _bgr_to_rgb_tensor(img1, self.device) * 2.0 - 1.0
+        gt = _bgr_to_rgb_tensor(img2, self.device) * 2.0 - 1.0
+        return float(model(pred, gt).item())
+
+    @torch.no_grad()
+    def calculate_dists(self, img1, img2):
+        """DISTS distance between two BGR uint8 images (lower is better)."""
+        model = self._get_dists_model()
+        pred = _bgr_to_rgb_tensor(img1, self.device)
+        gt = _bgr_to_rgb_tensor(img2, self.device)
+        return float(model(pred, gt).item())
+
+
+def summarize_metric(values):
+    """Return the (mean, sample std) of a list of metric values.
+
+    Non-finite values (e.g. ``inf`` PSNR from identical images) are ignored.
+    The standard deviation uses ``ddof=1`` (sample std), matching the reference
+    evaluation. Returns ``(nan, nan)`` if there are no finite values.
+
+    Args:
+        values (Sequence[float]): Per-image metric values.
+
+    Returns:
+        tuple[float, float]: (mean, std).
+    """
+    arr = np.asarray(values, dtype=np.float64)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float("nan"), float("nan")
+    mean = float(finite.mean())
+    std = float(finite.std(ddof=1)) if finite.size > 1 else 0.0
+    return mean, std
+
+
+def format_mean_std(mean, std, decimals=4):
+    """Format a (mean, std) pair as ``"mean ± std"`` with fixed decimals."""
+    return f"{mean:.{decimals}f} ± {std:.{decimals}f}"
+
+
 def bgr2ycbcr(img, y_only=False):
     """Convert a BGR image to YCbCr image.
 
